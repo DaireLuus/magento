@@ -1,0 +1,32 @@
+{
+    "name": "lumav/module-occo-benefit-bar-graph-ql",
+    "description": "Benefit bar",
+    "type": "magento2-module",
+    "authors": [
+        {
+            "name": "Daire Lüüs",
+            "email": "daire.luus@lumav.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.1.0"
+    },
+    "license": [
+        "proprietary"
+    ],
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Lumav\\OccoBenefitBarGraphQl\\": ""
+        }
+    },
+    "keywords": [
+        "graphql",
+        "occo",
+        "benefitbar"
+    ],
+    "version": "0.0.1",
+    "minimum-stability": "stable"
+}

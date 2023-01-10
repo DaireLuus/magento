@@ -1,0 +1,33 @@
+{
+    "name": "lumav/module-home4you-ftpproductupdater",
+    "description": "A daily cron task that gets products information from FTP and updates them in database",
+    "type": "magento2-module",
+    "authors": [
+        {
+            "name": "Elar Vahtramae",
+            "email": "elar.vahtramae@lumav.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.3.0"
+    },
+    "suggest": {
+        "magento/module-contact": "100.3.*"
+    },
+    "license": [
+        "proprietary"
+    ],
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Lumav\\Home4YouFtpProductUpdater\\": ""
+        }
+    },
+    "keywords": [
+        "composer"
+    ],
+    "version": "0.0.1",
+    "minimum-stability": "stable"
+}

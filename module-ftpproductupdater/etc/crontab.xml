@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<!--
+/**
+ * Copyright © Lumav Commerce OÜ. All rights reserved.
+ */
+ -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Cron:etc/crontab.xsd">
+	<group id="default">
+		<job instance="Lumav\Home4YouFtpProductUpdater\Cron\ProductUpdater" method="execute" name="lumav_home4you_ftpproductupdater">
+			<config_path>lumav_decco/configuration/cron_expression</config_path>
+		</job>
+	</group>
+</config>

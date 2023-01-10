@@ -1,0 +1,776 @@
+diff --git a/Cron/ProductUpdater.php b/Cron/ProductUpdater.php
+index f738716..39fd40d 100644
+--- a/Cron/ProductUpdater.php
++++ b/Cron/ProductUpdater.php
+@@ -6,104 +6,160 @@
+ 
+ namespace Lumav\Home4YouFtpProductUpdater\Cron;
+ 
+-
+-use Magento\Framework\Xml\Parser;use Magento\InventoryApi\Api\SourceItemsSaveInterface;
+-use Magento\InventoryApi\Api\Data\SourceItemInterfaceFactory;
+-use Magento\Store\Model\StoreManagerInterface;
++use Magento\Framework\Xml\Parser;
++use Magento\Framework\App\ResourceConnection;
++use Lumav\Home4YouFtpProductUpdater\Model\Config;
++use Lumav\Home4YouFtpProductUpdater\Logger\Logger;
+ 
+ class ProductUpdater
+ {
+-    /**
+-     * @var SourceItemsSaveInterface
+-     * */
+-    protected $_sourceInterface;
+-
+-    /**
+-     * @var SourceItemInterfaceFactory
+-     * */
+-    protected $_sourceFactory;
+-
+-    /**
+-     * @var StoreManagerInterface
+-     * */
+-    protected $_storeManager;
+-
+     /**
+      * @var Parser
+      * */
+-    protected $_parser;
++    protected $parser;
+ 
+     /**
+-     * @var _username
+-     */
+-    protected $_username = 'H4yuserDecco';
++     * @var ResourceConnection
++     * */
++    protected $resource;
+ 
+     /**
+-     * @var _password
++     * @var Config
+      */
+-    protected $_password = 'DGvt6SrYoV';
++    protected $config;
+ 
+     /**
+-     * @var _storeWebsite
++     * @var Logger
+      */
+-    protected $_storeWebsite = 'home4you_lv';
++    protected $logger;
+ 
+     /**
+-     * @var _inventorySourceCode
+-     */
+-    protected $_inventorySourceCode = 'default';
++     * @var int
++     * */
++    protected $warehouseId;
+ 
+     /**
+-     * @var _url
+-     */
+-    protected $_url = 'http://xml.evelekt.ee/Hg202HhXHkV202206Kk29144/files/Vol.xml';
++     * @var array
++     * */
++    protected $existingSkus;
+ 
+-    /**
+-     * @param SourceItemsSaveInterface $sourceInterface
+-     * @param SourceItemInterfaceFactory $sourceFactory
+-     * @param StoreManagerInterface $storeManager
+-     * @param Parser $parser
+-     */
+     public function __construct(
+-        SourceItemsSaveInterface $sourceInterface,
+-        SourceItemInterfaceFactory $sourceFactory,
+-        StoreManagerInterface $storeManager,
+-        Parser $parser
++        Parser $parser,
++        ResourceConnection $resource,
++        Config $config,
++        Logger $logger
+     ) {
+-        $this->_sourceInterface = $sourceInterface;
+-        $this->_sourceFactory = $sourceFactory;
+-        $this->_storeManager = $storeManager;
+-        $this->_parser = $parser;
++        $this->parser = $parser;
++        $this->resource = $resource;
++        $this->config = $config;
++        $this->logger = $logger;
+     }
+ 
+     /**
+-     * Update product stock
++     * Update product stock from remote location
+      * @return ProductUpdater
+      */
+     public function execute(): ProductUpdater
+     {
++        $importEnabled = $this->config->getConfig(Config::XML_PATH_DECCO_CONFIG_IMPORT_ENABLED);
++        $this->logger->debug(sprintf('Import status: %s', $importEnabled));
++        if (!$importEnabled) {
++            return $this;
++        }
++
++        $username = $this->config->getConfig(Config::XML_PATH_DECCO_CONFIG_USERNAME);
++        $password = $this->config->getConfig(Config::XML_PATH_DECCO_CONFIG_PASSWORD);
++        $url = $this->config->getConfig(Config::XML_PATH_DECCO_CONFIG_URL);
++
++        if (!$username || !$password || !$url) {
++            $this->logger->error('Username, password or XML url has not been configured!');
++            return $this;
++        }
++
+         $context = stream_context_create([
+             'http' => [
+-                'header' => 'Authorization: Basic ' . base64_encode($this->_username . ':' . $this->_password),
++                'header' => 'Authorization: Basic ' . base64_encode($username . ':' . $password),
+                 'protocol_version' => 1.1
+             ]
+         ]);
+ 
+-        $products = $this->_parser->loadXML(file_get_contents($this->_url, false, $context))->xmlToArray();
+-        $stores = $this->_storeManager->getWebsite($this->_storeWebsite)->getStores();
+-
+-        foreach ($stores as $storeId) {
+-            $this->_storeManager->setCurrentStore($storeId);
++        $startTime = time();
++        try {
++            $products = $this->parser->loadXML(file_get_contents($url, false, $context))->xmlToArray();
++            $this->logger->info(sprintf('Import start: %s', 'orders'));
+             foreach ($products['buum']['inventory']['item'] ?? [] as $product) {
+-                $sourceItem = $this->_sourceFactory->create();
+-                $sourceItem->setSourceCode($this->_inventorySourceCode);
+-                $sourceItem->setSku($product['code']);
+-                $sourceItem->setQuantity($product['volume']);
+-                $sourceItem->setStatus((bool)$product['volume']);
+-                $this->_sourceInterface->execute([$sourceItem]);
++                $this->insertOnDuplicate($product);
+             }
++        } catch (\Exception $e) {
++            $this->logger->error($e->getMessage());
++            $this->logger->error($e->getTraceAsString());
+         }
+ 
++        $this->logger->info(sprintf('Total importing time: %s, type: %s', (time() - $startTime), 'products'));
+         return $this;
+     }
++
++    /**
++     * Get warehouse id by warehouse code
++     * @return int
++     */
++    public function getWarehouseIdByCode($forceReload = false): int
++    {
++        if ($forceReload || !isset($this->warehouseId)) {
++            $conn = $this->resource->getConnection();
++            $code = $this->config->getConfig(Config::XML_PATH_DECCO_CONFIG_WAREHOUSECODE);
++            $select = $conn->select('entity_id')
++                ->from(
++                    ['w' => 'devall_buum_warehouse']
++                )
++                ->where('w.code=?', $code);
++            $this->warehouseId = $conn->fetchOne($select);
++        }
++
++        return $this->warehouseId;
++    }
++
++    /**
++     * Get existing product sku and product id pairs
++     * @return array
++     */
++    public function getExistingSkus($forceReload = false): array
++    {
++        if ($forceReload || !isset($this->existingSkus)) {
++            $connection = $this->resource->getConnection();
++            $productTableName = $connection->getTableName('catalog_product_entity');
++
++            $sql = $connection->select()->from(['cpe' => $productTableName], ['sku', 'entity_id'])
++                ->columns([
++                    'cpe.sku',
++                    'cpe.entity_id'
++                ]);
++
++            $this->existingSkus = $connection->fetchPairs($sql);
++        }
++
++        return $this->existingSkus;
++    }
++
++    /**
++     * Update product stock for existing skus
++     * @return void
++     */
++    public function insertOnDuplicate($product): void
++    {
++        $conn = $this->resource->getConnection();
++        $tableName = $conn->getTableName('devall_buum_warehouse_stock');
++        $warehouseId = $this->getWarehouseIdByCode();
++        $productSkusToIds = $this->getExistingSkus();
++
++        if (isset($productSkusToIds[$product['code']])) {
++            $data = [
++                'warehouse_id' => $warehouseId,
++                'product_id' => $productSkusToIds[$product['code']],
++                'qty' => $product['volume']
++            ];
++
++            $conn->insertOnDuplicate($tableName, $data, ['qty']);
++        }
++    }
+ }
+diff --git a/Logger/Debug.php b/Logger/Debug.php
+new file mode 100644
+index 0000000..7db4037
+--- /dev/null
++++ b/Logger/Debug.php
+@@ -0,0 +1,76 @@
++<?php
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++
++namespace Lumav\Home4YouFtpProductUpdater\Logger;
++
++use Lumav\Home4YouFtpProductUpdater\Model\Config;
++use Magento\Framework\Filesystem\DriverInterface;
++
++/**
++ * Class Debug
++ */
++class Debug extends \Magento\Framework\Logger\Handler\Base
++{
++    /**
++     * Logging level
++     * @var int
++     */
++    protected $loggerType = \Monolog\Logger::DEBUG;
++
++    /**
++     * Logging level
++     * @var int
++     */
++    protected $level = \Monolog\Logger::DEBUG;
++
++    /**
++     * File name
++     * @var string
++     */
++    protected $fileName = '/var/log/Home4YouFtpProductUpdater/ftpProductUpdater_debug.log';
++
++    /**
++     * @var Configuration
++     */
++    protected $config;
++
++    /**
++     * {@inheritdoc}
++     */
++    public function isHandling(array $record)
++    {
++        return $record['level'] === $this->level;
++    }
++
++
++    /**
++     * Debug constructor.
++     * @param Configuration $config
++     * @param DriverInterface $filesystem
++     * @param null $filePath
++     * @param null $fileName
++     * @throws \Exception
++     */
++    public function __construct(
++        Config $config,
++        DriverInterface $filesystem,
++        $filePath = null,
++        $fileName = null
++    )
++    {
++        $this->config = $config;
++        parent::__construct($filesystem, $filePath, $fileName);
++    }
++
++    /**
++     * @param array $record
++     */
++    public function write(array $record)
++    {
++        if($this->config->isDebugEnabled()) {
++            parent::write($record);
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/Logger/Error.php b/Logger/Error.php
+new file mode 100644
+index 0000000..273c5f3
+--- /dev/null
++++ b/Logger/Error.php
+@@ -0,0 +1,38 @@
++<?php
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++
++namespace Lumav\Home4YouFtpProductUpdater\Logger;
++
++/**
++ * Class Error
++ */
++class Error extends \Magento\Framework\Logger\Handler\Base
++{
++    /**
++     * Logging level
++     * @var int
++     */
++    protected $loggerType = \Monolog\Logger::ERROR;
++
++    /**
++     * Logging level
++     * @var int
++     */
++    protected $level = \Monolog\Logger::ERROR;
++
++    /**
++     * File name
++     * @var string
++     */
++    protected $fileName = '/var/log/Home4YouFtpProductUpdater/ftpProductUpdater_error.log';
++
++    /**
++     * {@inheritdoc}
++     */
++    public function isHandling(array $record)
++    {
++        return $record['level'] === $this->level;
++    }
++}
+\ No newline at end of file
+diff --git a/Logger/Info.php b/Logger/Info.php
+new file mode 100644
+index 0000000..1529f93
+--- /dev/null
++++ b/Logger/Info.php
+@@ -0,0 +1,38 @@
++<?php
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++
++namespace Lumav\Home4YouFtpProductUpdater\Logger;
++
++/**
++ * Class Info
++ */
++class Info extends \Magento\Framework\Logger\Handler\Base
++{
++    /**
++     * Logging level
++     * @var int
++     */
++    protected $loggerType = \Monolog\Logger::INFO;
++
++    /**
++     * Logging level
++     * @var int
++     */
++    protected $level = \Monolog\Logger::INFO;
++
++    /**
++     * File name
++     * @var string
++     */
++    protected $fileName = '/var/log/Home4YouFtpProductUpdater/ftpProductUpdater_info.log';
++
++    /**
++     * {@inheritdoc}
++     */
++    public function isHandling(array $record)
++    {
++        return $record['level'] === $this->level;
++    }
++}
+\ No newline at end of file
+diff --git a/Logger/Logger.php b/Logger/Logger.php
+new file mode 100644
+index 0000000..2229c52
+--- /dev/null
++++ b/Logger/Logger.php
+@@ -0,0 +1,13 @@
++<?php
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++
++namespace Lumav\Home4YouFtpProductUpdater\Logger;
++
++/**
++ * Class Logger
++ */
++class Logger extends \Monolog\Logger
++{
++}
+\ No newline at end of file
+diff --git a/Model/Config.php b/Model/Config.php
+new file mode 100644
+index 0000000..9235c71
+--- /dev/null
++++ b/Model/Config.php
+@@ -0,0 +1,77 @@
++<?php
++
++/**
++ * Copyright © Lumav Commerce. All rights reserved.
++ */
++
++namespace Lumav\Home4YouFtpProductUpdater\Model;
++
++use Magento\Store\Model\ScopeInterface;
++use Magento\Framework\App\Config\ScopeConfigInterface;
++use Magento\Framework\App\Config\Storage\WriterInterface;
++
++class Config
++{
++    const XML_PATH_DECCO_CONFIG_USERNAME = 'lumav_decco/general/username';
++    const XML_PATH_DECCO_CONFIG_PASSWORD = 'lumav_decco/general/password';
++    const XML_PATH_DECCO_CONFIG_URL = 'lumav_decco/general/url';
++    const XML_PATH_DECCO_CONFIG_WAREHOUSECODE = 'lumav_decco/general/warehousecode';
++    const XML_PATH_DECCO_CONFIG_IMPORT_ENABLED = 'lumav_decco/configuration/import';
++    const XML_PATH_DECCO_DEBUG_LOG = 'lumav_decco/debug/log';
++
++    /**
++     * @var ScopeConfigInterface
++     */
++    protected $scopeConfig;
++
++    /**
++     * @var WriterInterface
++     */
++    protected $configWriter;
++
++    /**
++     * @param ScopeConfigInterface $scopeConfig
++     * @param WriterInterface $configWriter
++     */
++    
++    public function __construct(
++        ScopeConfigInterface $scopeConfig,
++        WriterInterface $configWriter
++    ) {
++        $this->scopeConfig = $scopeConfig;
++        $this->configWriter = $configWriter;
++    }
++
++    /**
++     * Gets config value
++     *
++     * @param string $path
++     * @param null $scopeType
++     * @param null $scopeCode
++     * @return mixed
++     */
++    public function getConfig(string $path, $scopeType = null, $scopeCode = null)
++    {
++        if ($scopeType === null) {
++            $scopeType = ScopeInterface::SCOPE_STORE;
++        }
++
++        return $this->scopeConfig->getValue($path, $scopeType, $scopeCode);
++    }
++
++    /**
++     * Set config value
++     *
++     * @param string $path
++     * @return mixed
++     */
++    public function setConfig($path, $value)
++    {
++        return $this->configWriter->save($path, $value, ScopeConfigInterface::SCOPE_TYPE_DEFAULT, 0);
++    }
++
++    public function isDebugEnabled($scopeType = null, $scopeCode = null)
++    {
++        return $this->getConfig(self::XML_PATH_DECCO_DEBUG_LOG, $scopeType, $scopeCode);
++    }
++}
+diff --git a/Setup/Patch/Data/Decco.php b/Setup/Patch/Data/Decco.php
+new file mode 100644
+index 0000000..4e218b7
+--- /dev/null
++++ b/Setup/Patch/Data/Decco.php
+@@ -0,0 +1,76 @@
++<?php
++
++/**
++ * Copyright © Lumav. All rights reserved.
++ */
++
++namespace Lumav\Home4YouFtpProductUpdater\Setup\Patch\Data;
++
++use Magento\Framework\Setup\ModuleDataSetupInterface;
++use Magento\Framework\Setup\Patch\DataPatchInterface;
++use Magento\Framework\Setup\Patch\PatchRevertableInterface;
++
++class Decco implements DataPatchInterface, PatchRevertableInterface
++{
++    /**
++     * @var ModuleDataSetupInterface
++     */
++    private $moduleDataSetup;
++
++    /**
++     * @param ModuleDataSetupInterface $moduleDataSetup
++     */
++    public function __construct(ModuleDataSetupInterface $moduleDataSetup)
++    {
++        $this->moduleDataSetup = $moduleDataSetup;
++    }
++
++    /**
++     * @inheritdoc
++     */
++    public function apply()
++    {
++        $this->moduleDataSetup->getConnection()->startSetup();
++        $tableName = $this->moduleDataSetup->getTable('devall_buum_warehouse');
++        if ($this->moduleDataSetup->getConnection()->isTableExists($tableName) == true) {
++            $data = [
++                'code' => 9999,
++                'name' => 'DECCO'
++            ];
++
++            $this->moduleDataSetup->getConnection()->insert($tableName, $data);
++        }
++
++        $this->moduleDataSetup->getConnection()->endSetup();
++    }
++
++    /**
++     * @inheritdoc
++     */
++    public function revert()
++    {
++        $this->moduleDataSetup->getConnection()->startSetup();
++        $tableName = $this->moduleDataSetup->getTable('devall_buum_warehouse');
++        if ($this->moduleDataSetup->getConnection()->isTableExists($tableName) == true) {
++            $this->moduleDataSetup->getConnection()->delete($tableName, ['code = ?' => 9999]);
++        }
++
++        $this->moduleDataSetup->getConnection()->endSetup();
++    }
++
++    /**
++     * @inheritdoc
++     */
++    public static function getDependencies()
++    {
++        return [];
++    }
++
++    /**
++     * @inheritdoc
++     */
++    public function getAliases()
++    {
++        return [];
++    }
++}
+diff --git a/composer.json b/composer.json
+index 3ebccb6..b666e3d 100644
+--- a/composer.json
++++ b/composer.json
+@@ -9,15 +9,13 @@
+         }
+     ],
+     "require": {
+-        "php": "~7.4||~7.2.0",
+-        "lumav/module-home4you-ftpproductupdater": "dev-master"
++        "php": ">=7.3.0"        
+     },
+     "suggest": {
+         "magento/module-contact": "100.3.*"
+     },
+     "license": [
+-        "OSL-3.0",
+-        "AFL-3.0"
++        "proprietary"
+     ],
+     "autoload": {
+         "files": [
+diff --git a/etc/adminhtml/system.xml b/etc/adminhtml/system.xml
+new file mode 100644
+index 0000000..f398fb4
+--- /dev/null
++++ b/etc/adminhtml/system.xml
+@@ -0,0 +1,51 @@
++<?xml version="1.0"?>
++<!--
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++ -->
++<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
++    <system>
++        <tab id="lumav" translate="label" sortOrder="10">
++            <label>Lumav Extensions</label>
++        </tab>
++        <section id="lumav_decco" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="0" showInStore="0">
++            <label>DECCO</label>
++            <tab>lumav</tab>
++            <resource>Lumav_Home4YouFtpProductUpdater::configuration</resource>
++            <group id="general" translate="label" type="text" sortOrder="1" showInDefault="1" showInWebsite="0" showInStore="0">
++                <label>General</label>
++                <field id="username" translate="label" type="text" sortOrder="0" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Username</label>
++                </field>
++                <field id="password" translate="label" type="password" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Password</label>
++                </field>
++                <field id="url" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Xml url</label>
++                </field>
++                <field id="warehousecode" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Warehouse code</label>
++                </field>
++            </group>
++            <group id="configuration" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0">
++                <label>API</label>
++                <field id="import" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Order import event enabled</label>
++                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
++                </field>
++                <field id="cron_expression" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Cron expression</label>
++                </field>
++            </group>
++            <group id="debug" translate="label" type="text" sortOrder="50" showInDefault="1" showInWebsite="0" showInStore="0">
++                <label>DEBUG</label>
++                <field id="log" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0">
++                    <label>Enable debug mode</label>
++                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
++                    <comment>Enabling debug mode means more precise logging.</comment>
++                </field>
++            </group>
++        </section>
++    </system>
++</config>
+diff --git a/etc/config.xml b/etc/config.xml
+new file mode 100644
+index 0000000..069fc9f
+--- /dev/null
++++ b/etc/config.xml
+@@ -0,0 +1,23 @@
++<?xml version="1.0"?>
++<!--
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++ -->
++<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
++    <default>
++        <lumav_decco>
++            <general>
++                <url>http://xml.evelekt.ee/Hg202HhXHkV202206Kk29144/files/Vol.xml</url>
++                <warehousecode>9999</warehousecode>
++            </general>
++            <configuration>
++                <import>0</import>
++                <cron_expression>0 0 * * *</cron_expression>
++            </configuration>
++            <debug>
++                <log>0</log>
++            </debug>
++        </lumav_decco>
++    </default>
++</config>
+\ No newline at end of file
+diff --git a/etc/crontab.xml b/etc/crontab.xml
+index 566bed2..caee51c 100644
+--- a/etc/crontab.xml
++++ b/etc/crontab.xml
+@@ -7,7 +7,7 @@
+ <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Cron:etc/crontab.xsd">
+ 	<group id="default">
+ 		<job instance="Lumav\Home4YouFtpProductUpdater\Cron\ProductUpdater" method="execute" name="lumav_home4you_ftpproductupdater">
+-			<schedule>0 0 * * *</schedule>
++			<config_path>lumav_decco/configuration/cron_expression</config_path>
+ 		</job>
+ 	</group>
+-</config>
+\ No newline at end of file
++</config>
+diff --git a/etc/di.xml b/etc/di.xml
+new file mode 100644
+index 0000000..c1dc84f
+--- /dev/null
++++ b/etc/di.xml
+@@ -0,0 +1,34 @@
++<?xml version="1.0"?>
++<!--
++/**
++ * Copyright © Lumav Commerce OÜ. All rights reserved.
++ */
++ -->
++ <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
++<type name="Lumav\Home4YouFtpProductUpdater\Logger\Info">
++        <arguments>
++            <argument name="ftpProductUpdater_info" xsi:type="object">Magento\Framework\Filesystem\Driver\File</argument>
++        </arguments>
++    </type>
++    <type name="Lumav\Home4YouFtpProductUpdater\Logger\Debug">
++        <arguments>
++            <argument name="ftpProductUpdater_debug" xsi:type="object">Magento\Framework\Filesystem\Driver\File</argument>
++        </arguments>
++    </type>
++    <type name="Lumav\Home4YouFtpProductUpdater\Logger\Error">
++        <arguments>
++            <argument name="ftpProductUpdater_error" xsi:type="object">Magento\Framework\Filesystem\Driver\File</argument>
++        </arguments>
++    </type>
++    <type name="Lumav\Home4YouFtpProductUpdater\Logger\Logger">
++        <arguments>
++            <argument name="name" xsi:type="string">ftpProductUpdaterLogger</argument>
++            <argument name="handlers" xsi:type="array">
++                <item name="info" xsi:type="object">Lumav\Home4YouFtpProductUpdater\Logger\Info</item>
++                <item name="debug" xsi:type="object">Lumav\Home4YouFtpProductUpdater\Logger\Debug</item>
++                <item name="error" xsi:type="object">Lumav\Home4YouFtpProductUpdater\Logger\Error</item>
++            </argument>
++        </arguments>
++    </type>
++     
++</config>
+\ No newline at end of file
+diff --git a/etc/di.xml2 b/etc/di.xml2
+deleted file mode 100644
+index e33eca8..0000000
+--- a/etc/di.xml2
++++ /dev/null
+@@ -1,9 +0,0 @@
+-<?xml version="1.0"?>
+-<!--
+-/**
+- * Copyright © Lumav Commerce OÜ. All rights reserved.
+- */
+- -->
+- <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+-    <preference for="" type="" />
+-</config>
+\ No newline at end of file
+diff --git a/etc/module.xml b/etc/module.xml
+index 932c735..f4493e0 100644
+--- a/etc/module.xml
++++ b/etc/module.xml
+@@ -5,6 +5,5 @@
+  */
+  -->
+ <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Module/etc/module.xsd">
+-  <module name="Lumav_Home4YouFtpProductUpdater">
+-  </module>
++  <module name="Lumav_Home4YouFtpProductUpdater"/>
+ </config>

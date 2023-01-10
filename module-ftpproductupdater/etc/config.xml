@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Lumav Commerce OÜ. All rights reserved.
+ */
+ -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <lumav_decco>
+            <general>
+                <url>http://xml.evelekt.ee/Hg202HhXHkV202206Kk29144/files/Vol.xml</url>
+                <warehousecode>9999</warehousecode>
+            </general>
+            <configuration>
+                <import>0</import>
+                <cron_expression>30 * * * *</cron_expression>
+            </configuration>
+            <debug>
+                <log>0</log>
+            </debug>
+        </lumav_decco>
+    </default>
+</config>
