@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * @copyright Copyright (c) 2020 Lumav OÜ (http://www.lumav.com)
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <outdated_browser>
+            <general>
+                <enabled>0</enabled>
+                <debug>0</debug>
+                <min_versions><![CDATA[e:13
+i:12
+f:48
+o:30
+s:-3
+c:"56.0.2924"]]></min_versions>
+                <remind_after>24</remind_after>
+                <redirect_url>//updateoutdatedbrowser.com/</redirect_url>
+                <open_new_window>1</open_new_window>
+                <custom_notification_text><![CDATA[msg: Your web browser ({brow_name}) is out of date.
+msgmore: Update your browser for more security, speed and the best experience on this site.
+bupdate: Update browser
+bignore: Ignore
+remind: You will be reminded in {days} days.
+bnever: Never show again]]></custom_notification_text>
+            </general>
+        </outdated_browser>
+    </default>
+</config>

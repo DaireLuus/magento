@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+    	<tab id="lumav" translate="label" sortOrder="10">
+            <label>Lumav Extensions</label>
+        </tab>
+        <section id="daire" translate="label" type="text" sortOrder="32523412413242341" showInDefault="1" showInWebsite="1" showInStore="1">
+            <class>separator-top</class>
+            <tab>lumav</tab>
+            <label>Browser Notification</label>
+            <resource>Lumav_DaireStudy::config</resource>
+            <group id="general" translate="label" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>General Configuration</label>
+                <field id="enabled" translate="label comment" type="select" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enabled</label>
+                    <source_model>\Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Allow notification.</comment>
+                </field>
+                <field id="debug" translate="label comment" type="select" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Debug Mode</label>
+                    <source_model>\Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[For testing - notification is always displayed.<br/><span style="color: #ff0000">Do not use this in production environment.</span>]]></comment>
+                </field>
+                <field id="daireVIN" translate="label comment" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Very important notification</label>
+                    <comment><![CDATA[For testing - notification is always displayed.<br/>]]></comment>
+                </field>
+                <field id="personalVIN" translate="label comment" type="textarea" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Personal Notification Text</label>
+                    <comment><![CDATA[You can use a custom text message by specifying the parts of the message that get presented to users]]></comment>
+                </field>
+                <field id="min_versions" translate="label comment" type="textarea" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Browser Versions Older Than Entered Will Be Notified</label>
+                    <comment><![CDATA[Browsers older than defined will be notified. Options must be separated by new line.<br/>More information: <a href="//github.com/browser-update/browser-update/wiki/Details-on-configuration" target="_blank">link</a>]]></comment>
+                </field>
+                <field id="remind_after" translate="label comment" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Remind After X Hours</label>
+                    <comment><![CDATA[Notification will be shown again after passing this many hours.<br/><b>0 = show always.</b>]]></comment>
+                </field>
+                <field id="redirect_url" translate="label comment" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>URL for updating browser version</label>
+                    <comment>User will be redirected to given URL.</comment>
+                </field>
+                <field id="open_new_window" translate="label comment" type="select" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Open In New Window</label>
+                    <source_model>\Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Open link in new window/tab.</comment>
+                </field>
+                <field id="custom_notification_text" translate="label comment" type="textarea" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Custom Notification Text</label>
+                    <comment><![CDATA[You can use a custom text message by specifying the parts of the message that get presented to users, for example:<br/>msg:Your web browser ({brow_name}) is out of date.<br/>msgmore:Update your browser for more security, speed and the best experience on this site.<br/>bupdate:Update browser <br/>bignore:Ignore <br/>remind:You will be reminded in {days} days. <br/>bnever:Never show again]]></comment>
+                </field>
+                <field id="language" translate="label comment" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Language</label>
+                    <comment>Define notice language, e.g. "en". When empty, language will be detected automatically.</comment>
+                </field>
+                <field id="testID" translate="label comment" type="text" sortOrder="0" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Test text</label>
+                    <comment><![CDATA[You can use a custom text message by specifying the parts of the message that get presented to users]]></comment>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>
