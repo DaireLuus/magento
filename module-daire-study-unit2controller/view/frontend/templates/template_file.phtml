@@ -1,0 +1,12 @@
+<div>
+    <h2>
+<?php
+
+use Lumav\DaireStudyUnit2controller\Block\OrderInfo;
+
+$blockObj= $block->getLayout()->createBlock('Lumav\DaireStudyUnit2controller\Block\OrderInfo');
+$orderInfo = $blockObj->getOrderInfo();
+echo ($orderInfo); ?>
+</h2>
+</div>
+

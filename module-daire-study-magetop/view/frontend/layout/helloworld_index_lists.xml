@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Block class (Magetop\Helloworld\Block\Posts) to get Data, phml file (items.phtml) to show data and (css/style.css) to style for page.
+-->
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" layout="1column" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+    <head>
+        <css src="Lumav_DaireStudyMagetop::css/style.css" />
+    </head>
+    <body>
+        <referenceContainer name="content">
+            <block class="Lumav\DaireStudyMagetop\Block\Posts" name="lumav.dairestudymagetop.posts" template="Lumav_DaireStudyMagetop::items.phtml" />
+        </referenceContainer>
+    </body>
+</page>
