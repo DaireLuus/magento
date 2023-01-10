@@ -1,0 +1,36 @@
+{
+    "name": "lumav/module-daire-study-unit3bundle",
+    "description": "Module to handle Contact Us form input",
+    "type": "magento2-module",
+    "authors": [
+        {
+            "name": "Daire Lüüs",
+            "email": "daire.luus@lumav.com"
+        }
+    ],
+    "require": {
+        "php": "~7.1.3||~7.4.27"
+    },
+    "suggest": {
+        "magento/module-graph-ql": "100.3.*",
+        "magento/module-contact": "100.3.*"
+    },
+    "license": [
+        "OSL-3.0",
+        "AFL-3.0"
+    ],
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Lumav\\DaireStudyUnit3bundle\\": ""
+        }
+    },
+    "keywords": [
+        "Contact, GraphQL",
+        "composer"
+    ],
+    "version": "0.0.1",
+    "minimum-stability": "stable"
+}
