@@ -1,0 +1,43 @@
+<?php
+/**
+ * @var \Lumav\DaireStudyUnit4list\Block\VendorList $block
+ */
+$vendorCollection = $block->getVendorListByParams();
+?>
+<style>
+    table, th, td {
+        border: 1px solid black;
+    }
+</style>
+
+
+<div>
+    <h1>Vendors list:</h1>
+    <table>
+        <tr>
+            <td>Vendor ID</td>
+            <td>Vendor name</td>
+        </tr>
+        <?php
+
+        /** @var \Lumav\DaireStudyUnit4list\Model\Vendor $vendor */
+        foreach ($vendorCollection as $vendor) {
+            ?>
+
+            <tr>
+                <td>
+                    <a href="<?= $block->escapeUrl(__($block->getVendorDetailsUrl($vendor->getId()))) ?>">
+                        <?= $block->escapeUrl(__($vendor->getId())) ?>
+                    </a>
+                </td>
+                <td>
+                    <a href="<?= $block->escapeUrl(__($block->getVendorDetailsUrl($vendor->getId()))) ?>">
+                        <?= $block->escapeUrl(__($vendor->getName())) ?>
+                    </a>
+                </td>
+            </tr>
+            <?php
+        }
+        ?>
+    </table>
+</div>
